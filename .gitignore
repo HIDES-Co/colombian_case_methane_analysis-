@@ -1,0 +1,41 @@
+# Ignore CSV files
+*.csv
+
+# Ignore images
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.svg
+*.webp
+
+# Ignore Shapefiles and their dependencies
+*.shp
+*.shx
+*.dbf
+*.prj
+*.sbn
+*.sbx
+*.cpg
+*.qpj
+*.geojson
+
+# Ignore Jupyter Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Ignore Python temporary files and folders
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore temporary working directories
+temp/
+tmp/
