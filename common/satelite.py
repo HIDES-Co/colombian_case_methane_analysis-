@@ -368,7 +368,7 @@ class csv_from_sat(object):
             print("The variable is a GeoDataFrame")
             gdf = roi
             
-        elif roi.type().getInfo() == 'FeatureCollection':
+        elif isinstance(roi, ee.FeatureCollection):
             print("The variable is a FeatureCollection")
             # Assuming merged_feature_collection_dict is your dictionary
             features = roi.getInfo()['features']
@@ -386,15 +386,16 @@ class csv_from_sat(object):
             raise("the actual ROI is not valid, please use a featureCollection or a gedaframe instead")
             
         
-        # Create a GeoDataFrame
-        #gdf = gpd.GeoDataFrame(data_dict['properties'], geometry=data_dict['geometry'])
+        if gdf.crs is None:
+            # Only set CRS if it doesn't have one
+            gdf.set_crs(epsg=4326, inplace=True)
+        else:
+            print("GeoDataFrame already has CRS:", gdf.crs)
         
-        # Set the CRS (assuming the input data is in EPSG:4326 which is latitude/longitude)
-        gdf.set_crs(epsg=4326, inplace=True)
-        
-        gdf.to_crs(epsg=3857).plot(ax=ax1, edgecolor='black', facecolor='none', linewidth=0.3, alpha=0.4)
-        # gdf.plot(ax=ax1, facecolor='none', edgecolor='black', linewidth=0.1)
-        #gdf.plot(ax=ax1, facecolor='none', edgecolor='black', linewidth=2)
+        # Transform to Web Mercator for plotting
+        gdf = gdf.to_crs(epsg=3857)
+              
+        gdf.plot(ax=ax1, edgecolor='black', facecolor='none', linewidth=0.3, alpha=0.4)
         
         plt.savefig('emissions_images/'+title + '.png', dpi=1200, bbox_inches='tight')
 

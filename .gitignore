@@ -39,3 +39,7 @@ Thumbs.db
 # Ignore temporary working directories
 temp/
 tmp/
+
+
+Departamentos_Junio_2024_shp/
+res_img/
