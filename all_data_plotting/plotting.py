@@ -41,7 +41,9 @@ gdf = gpd.read_file(file_path)
 #-------------------------------------------------
 roi = gdf
 
-csv_filename = 'data_analysis/colombia_prom_2020_filtered.csv'
+
+#csv_filename = 'data_analysis/colombia_prom_2020_filtered.csv'
+csv_filename = 'time series/colombia_results_filtrado.csv'
 layer = 'CH4_column_volume_mixing_ratio_dry_air_bias_corrected'
 title = 'CH4 column Mean values 2019-02-01 to 2024-09-27'
 cbar_title = 'CH4 column Mean values mol/mol'
@@ -49,8 +51,9 @@ cbar_title = 'CH4 column Mean values mol/mol'
 
 #---------------------------------------------------------------------
 
+r = pd.read_csv(csv_filename, usecols=(2,3,5), delimiter=',') # se carga el archivo .csv para el caso filtrado
 
-r = pd.read_csv(csv_filename, usecols=(0,1,3),delimiter=',') # se carga el archivo .csv
+#r = pd.read_csv(csv_filename, usecols=(0,1,3),delimiter=',') # se carga el archivo .csv
 
 sat_data = csv_from_sat(r)
 
