@@ -913,18 +913,20 @@ file_path = os.path.join(common_path, 'land_cover/e_cobertura_tierra_2020_admin.
 gdf = gpd.read_file(file_path)
 
 from deep_translator import DeeplTranslator #ChatGptTranslator
+from dotenv import load_dotenv
+load_dotenv()
 
 mydict1={'1':'1. Artificialized territories','2':'2. Territorios agrícolas','3':'3. Bosques y áreas seminaturales','4':'4. Áreas húmedas','5':'5. Superficies de agua'}
 for i in mydict1.keys():
     if i == '1':
         continue
-    mydict1[i]=DeeplTranslator(api_key="REDACTED_DEEPL_KEY", source="es", target="en", use_free_api=True).translate(mydict1[i])
+    mydict1[i]=DeeplTranslator(api_key=os.getenv("DEEPL_API_KEY"), source="es", target="en", use_free_api=True).translate(mydict1[i])
 
 
 Nivel3_path = os.path.join(parent_dir, 'common/Nivel3.csv')
 with open(Nivel3_path, mode='r') as infile:
     reader = csv.reader(infile)
-    mydict = {rows[1]:DeeplTranslator(api_key="REDACTED_DEEPL_KEY", source="es", target="en", use_free_api=True).translate(rows[0]) for rows in reader}
+    mydict = {rows[1]:DeeplTranslator(api_key=os.getenv("DEEPL_API_KEY"), source="es", target="en", use_free_api=True).translate(rows[0]) for rows in reader}
 mydict['142'] = '1.4.2. Recreational facilities'
 mydict['214'] = '2.1.4. Vegetables'
 

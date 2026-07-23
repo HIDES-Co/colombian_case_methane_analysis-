@@ -35,7 +35,6 @@
 venv/
 env/
 ENV/
-.python-version
 build/
 dist/
 *.egg-info/
