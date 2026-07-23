@@ -1,0 +1,207 @@
+import io
+import sys
+from contextlib import redirect_stdout
+import os
+import geopandas as gpd
+import pandas as pd
+import numpy as np
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+import seaborn as sns
+import statsmodels.api as sm
+from scipy import stats
+import pingouin as pg
+import requests
+from shapely.geometry import Polygon
+from shapely.geometry import Point
+import matplotlib.pyplot as plt
+import csv
+
+# Alistamiento de datos para correlaciones
+
+
+
+# Get current working directory and go up one level
+current_dir = os.getcwd()
+parent_dir = os.path.dirname(current_dir)
+common_path = os.path.join(parent_dir, 'common')
+common_path
+
+file_path = os.path.join(common_path, 'land_cover/e_cobertura_tierra_2020_admin.shp')
+# Load the file into a GeoDataFrame
+gdf = gpd.read_file(file_path)
+gdf.plot('nivel_1',legend=True)
+
+gdf.columns
+
+
+Creates a dictionary (mydict1) that maps land cover codes (e.g., '1', '2') to their human-readable descriptions (e.g., artificial territories, agricultural areas).
+
+mydict1={'1':'1. Territorios artificializados','2':'2. Territorios agrícolas','3':'3. Bosques y áreas seminaturales','4':'4. Áreas húmedas','5':'5. Superficies de agua'}
+mydict1
+
+Read all categories presented in the land cover shapefile and organize it in a dictionary "mydict" with the id as key and the label as value
+
+Nivel3_path = os.path.join(parent_dir, 'common/Nivel3.csv')
+with open(Nivel3_path, mode='r') as infile:
+    reader = csv.reader(infile)
+    mydict = {rows[1]:rows[0] for rows in reader}
+    
+mydict
+
+gdf['Leyenda_1'] = gdf['nivel_1'].map(mydict1)
+gdf[['Leyenda_1','nivel_1']]
+
+gdf['Leyenda_3'] = gdf['nivel_3'].map(mydict)
+gdf[['Leyenda_3','nivel_3']]
+
+encoded_df = pd.get_dummies(gdf, columns=["Leyenda_3"])  # Encode the "leyenda 3" column
+encoded_df1 = pd.get_dummies(gdf, columns=["Leyenda_1"])  # Encode the "Leyenda 1" column
+
+encoded_df = pd.concat([encoded_df,encoded_df1[['Leyenda_1_1. Territorios artificializados', 'Leyenda_1_2. Territorios agrícolas', 'Leyenda_1_3. Bosques y áreas seminaturales','Leyenda_1_4. Áreas húmedas',
+       'Leyenda_1_5. Superficies de agua']]], axis=1)
+encoded_df['groupb']=0
+encoded_df
+
+## Read data to carrelacionate
+
+sat_filtered_2020_path = os.path.join(common_path, 'satellite_csv_data/colombia_prom_2020_filtered.csv')
+df_s = pd.read_csv(sat_filtered_2020_path)
+sns.scatterplot(data=df_s,x='longitude',y='latitude',s=0.5)#,hue='CH4_column_volume_mixing_ratio_dry_air_bias_corrected')
+
+df_s
+
+df_s['coordinate_x'] = df_s['longitude'].apply(lambda x: [x])
+df_s['coordinate_y'] = df_s['latitude'].apply(lambda x: [x])
+df_s['coordinates'] = df_s['coordinate_x']+df_s['coordinate_y']
+df_s
+
+delta_y=0.01
+delta_x=0.01
+df_s['geometry'] = df_s['coordinates'].apply(
+    lambda x: Polygon([
+        (x[0] - delta_x, x[1] - delta_y),
+        (x[0] - delta_x, x[1] + delta_y),
+        (x[0] + delta_x, x[1] + delta_y),
+        (x[0] + delta_x, x[1] - delta_y)
+    ]))# Corregir el delta
+
+l_in = list(encoded_df.columns)
+
+while not l_in[0]=='Leyenda_3_1.1.1. Tejido urbano continuo':
+    l_in.pop(0)
+
+l_in.remove('groupb')
+
+for i in l_in:
+    encoded_df[i]=encoded_df[i]*encoded_df['SHAPE_Area']
+    
+df_s.loc[:,l_in] = None
+
+
+# Precompute geometries for faster access
+encoded_geoms = encoded_df['geometry']
+df_s_geoms = df_s['geometry']
+
+# Use list comprehension for faster iteration
+for j in df_s.index:
+    # Spatial query: find intersecting geometries
+    intersects_mask = df_s_geoms[j].intersects(encoded_geoms)
+    intersecting_data = encoded_df[intersects_mask]
+    
+    # Skip if no intersections found
+    if not intersecting_data.empty:
+        # Aggregate areas by land cover type
+        area_sums = intersecting_data.groupby('groupb')[l_in].sum()
+        
+        # Update results (using .at[] for faster scalar access)
+        for land_cover in l_in:
+            df_s.at[j, land_cover] = area_sums[land_cover].iloc[0]
+
+for j in df_s.index:
+    f=encoded_df[df_s['geometry'][j].intersects(encoded_df['geometry'])]
+    f1=f.groupby('groupb')[l_in].aggregate('sum') # Se suma el área total intersectada
+    if not len(f1)==0:
+        #print(j)
+        for i in l_in:
+            df_s.loc[j, i]=f1[i].iloc[0].copy()
+
+df_s
+
+#Eliminar zonas de agua para evitar glint
+
+df_s.to_csv('/corr_land_2020new.csv')
+
+#df_s=pd.read_csv(r'/content/drive/Shareddrives/PIGCC/Satelite/datos_csv/glint_intersect.csv')
+
+# Análisis de correlaciones
+
+df_corr=pd.read_csv(r'corr_land_2020new.csv',index_col=0)
+df_corr[(~(df_corr['Leyenda_1_5. Superficies de agua']>0))*(~(df_corr['Leyenda_1_4. Áreas húmedas']>0))]#+
+
+df_corr=df_corr[(~(df_corr['Leyenda_1_5. Superficies de agua']>0))*(~(df_corr['Leyenda_1_4. Áreas húmedas']>0))]
+sns.scatterplot(data=df_corr,x='longitude',y='latitude',s=1)
+df_corr
+
+l_in=list(df_corr.columns)
+#l_in.remove(['longitude', 'latitude','CH4_column_volume_mixing_ratio_dry_air_bias_corrected', 'coordinate_x','coordinate_y', 'coordinates', 'geometry'])
+while not l_in[0]=='Leyenda_3_1.1.1. Tejido urbano continuo':
+    l_in.pop(0)#(list(dfg.columns))
+l_in
+
+correlaciones=df_corr.corr(numeric_only=True)['CH4_column_volume_mixing_ratio_dry_air_bias_corrected']
+correlaciones
+
+print(len(correlaciones))
+correlaciones.sort_values(ascending=False).head(10)
+
+
+d={}
+for i in l_in:
+    #df_filtered = df_corr[df_corr[i] >1e-15]
+    df_corr.loc[df_corr[i] ==0, i] = np.nan
+    #transformed, lambda_ = stats.boxcox(df_corr[i])
+    #cor=df_filtered['CH4_column_volume_mixing_ratio_dry_air_bias_corrected'].corr(df_filtered[i])
+    #d[i]=cor
+    sns.scatterplot(x=i,y='CH4_column_volume_mixing_ratio_dry_air_bias_corrected',data=df_corr)
+    plt.show()
+
+corr_final=pg.pairwise_corr(df_corr,columns=[['CH4_column_volume_mixing_ratio_dry_air_bias_corrected'],l_in])
+corr_final.sort_values(by=['p-unc'])[['X', 'Y', 'n', 'r', 'p-unc','BF10']].head(60)
+
+df_sorted = corr_final.reindex(corr_final['r'].abs().sort_values(ascending=False).index)
+df_sorted#[(df_sorted['p-unc']<0.01)*(df_sorted['n']>20)].head(60)
+
+#dfg.groupby('nivel_3').nunique()['leyenda']
+
+df_corr.loc[df_corr['Leyenda_1_2. Territorios agrícolas'] !=0 ]
+
+df_sorted['abs']=df_sorted['r'].abs()
+df_sorted.to_csv(r'correlaciones_fil.csv')
+
+df_sorted = pd.read_csv('correlaciones_fil.csv')
+
+import statsmodels
+#df_cor_filtered['p-val'].to_numpy()
+p_corrected=statsmodels.stats.multitest.multipletests(df_sorted['p-unc'],method='fdr_bh')
+#p_corrected=statsmodels.stats.multitest.fdrcorrection(p_vals)
+df_sorted[p_corrected[0]*(df_sorted['n']>20)]
+
+df_cor_filtered=df_sorted.copy()
+df_cor_filtered['reject_bh']=p_corrected[0]
+df_cor_filtered['reject_cb']=df_cor_filtered['p-unc']<p_corrected[3]
+df_cor_filtered['p_corregido']=p_corrected[1]
+df_cor_filtered
+
+df_cor_filtered = df_cor_filtered[df_cor_filtered['reject_bh'] == True]
+
+df_cor_filtered
+
+df_cor_filtered.to_csv('corr_land_2020_8-marzo-25.csv')
+
+import pandas as pd
+df_cor_filtered = pd.read_csv('corr_land_2020_8-marzo-25.csv')
+df_cor_filtered.drop(['Unnamed: 0.2', 'Unnamed: 0.1', 'Unnamed: 0', 'X'], axis=1)
+
+df_cor_filtered['Y'][14]
+

@@ -27,7 +27,7 @@ import matplotlib.colors as mcolors
 #------------
 
 #ee.Authenticate()
-ee.Initialize()
+#ee.Initialize()
 #------------
 
 class Satellite(ABC):
@@ -397,7 +397,7 @@ class csv_from_sat(object):
               
         gdf.plot(ax=ax1, edgecolor='black', facecolor='none', linewidth=0.3, alpha=0.4)
         
-        plt.savefig('emissions_images/'+title + '.png', dpi=1200, bbox_inches='tight')
+        plt.savefig(title + '.png', dpi=1200, bbox_inches='tight')
 
         plt.show()
         

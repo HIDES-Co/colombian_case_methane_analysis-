@@ -1,0 +1,163 @@
+import pygrib
+import numpy as np
+import matplotlib.pyplot as plt
+import sys
+import os
+
+import datetime
+import pygrib
+import numpy as np
+
+filename_1 = "./EGG4/c680c6abfed449d6ac9992c57a7f6c2d.grib"
+filename_2 = "./EGG4/41f26c030437d80ad6b4886fcc0aad4a_mean_column.grib"
+
+# Open both GRIB files
+grbs1 = pygrib.open(filename_1)
+grbs2 = pygrib.open(filename_2)
+
+# Pre-process grbs1 to avoid repeated iterating
+# Create a dictionary indexed by date for faster lookups
+level_data = {}
+for grb_level in grbs1:
+    level_date = datetime.datetime(grb_level.year, grb_level.month, grb_level.day)
+    level = grb_level.level
+    
+    # Store the level data indexed by date
+    if level_date not in level_data:
+        level_data[level_date] = {}
+    
+    # Cache the processed values to avoid recomputation
+    level_data[level_date][level] = np.array(grb_level.values) * 1E9
+
+
+
+# # Close the GRIB files
+grbs1.close()
+grbs2.close()
+
+dates = []
+mean_colmn_tensor = []
+for date in level_data.keys():
+
+    colmn_sum = np.zeros(level_data[date][1].shape)
+    prev_level = 0
+    
+    for level, value in sorted(level_data[date].items()):
+
+        deltaP = level - prev_level
+        prev_level = level
+        colmn_sum += deltaP * value
+        
+    # Append to result arrays
+    dates.append(date)
+    mean_colmn_i = colmn_sum/1000
+    mean_colmn_tensor.append(mean_colmn_i)
+
+# Process mean column data
+all_dates = []
+ratios_tensor = []
+mean_ratios = []
+heights = []
+
+for i, mean_column in enumerate(mean_colmn_tensor):
+    mean_date = dates[i]
+
+    if mean_date in level_data:
+        # Process all relevant levels for this date
+        
+        for level, value in sorted(level_data[mean_date].items()):
+            # Calculate ratio once
+            ratio = np.divide(value, mean_column)
+            print(f"Valor max: {value.max()} min: {value.min()} a presión: {level} hPa")
+            # Append to result arrays
+            all_dates.append(mean_date)
+            ratios_tensor.append(ratio)
+            mean_ratios.append(np.mean(ratio))
+            heights.append(level)
+    else:
+        raise("NoDateError: no se encontró la fecha")
+                    
+
+dates[0]
+
+# Define your date range
+
+# Convert lists to NumPy arrays if they aren't already
+dates_array = np.array(all_dates)
+ratios_array = np.array(ratios_tensor)
+heights_array = np.array(heights)
+mean_ratios_array = np.array(mean_ratios)
+
+def get_filtered_data(date):    
+    # Create a mask for the date range
+    date_mask = (dates_array == date)
+    
+    # Apply the mask to filter the arrays
+    filtered_ratios = ratios_array[date_mask]
+    filtered_heights = heights_array[date_mask]
+    filtered_dates = dates_array[date_mask]
+    filtered_mean_ratios = mean_ratios_array[date_mask]
+
+    return filtered_dates, filtered_heights, filtered_dates, filtered_mean_ratios
+
+
+
+print(f"Fecha: {filtered_dates[0]} \n")
+for i, ratio in enumerate(filtered_ratios):
+    print("------------------------------------------------")
+    print(f"max ratio: {np.max(ratio):.4f} - min ratio: {np.min(ratio):.4f}")
+    print(f"Mean ratio: {np.mean(ratio):.4f}")
+    print(f"pressure: {filtered_heights[i]} hPa")
+
+len(dates)
+
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+
+# Define start and end dates
+start_date = dates[0]
+end_date = dates[-1]
+
+# Method 1: Using dateutil's relativedelta (recommended)
+current = start_date
+
+mean_ratios_1000 = []
+while current <= end_date:
+    current += relativedelta(months=1)
+    filtered_dates, filtered_heights, filtered_dates, filtered_mean_ratios = get_filtered_data(current)
+    mean_ratio_1000 = np.mean(filtered_ratios[-1])
+    mean_ratios_1000.append(mean_ratio_1000)
+
+import matplotlib.pyplot as plt
+
+# Crear la gráfica
+plt.figure(figsize=(10, 6))
+plt.plot(dates, mean_ratios_1000, marker='o', linestyle='-', color='b')
+
+# Configurar ejes y título
+plt.xlabel('date')
+plt.ylabel('Mean Ratio')
+plt.title('ratios over time')
+plt.grid(True)
+
+# Mostrar la gráfica
+plt.show()
+
+mean_ratios_1000 = np.array(mean_ratios_1000)
+np.mean(mean_ratios_1000)
+
+import matplotlib.pyplot as plt
+
+# Crear la gráfica
+plt.figure(figsize=(10, 6))
+plt.plot(filtered_heights, filtered_mean_ratios, marker='o', linestyle='-', color='b')
+
+# Configurar ejes y título
+plt.xlabel('Presión (hPa)')
+plt.ylabel('Ratio')
+plt.title('Ratio vs Presión')
+plt.gca().invert_xaxis()  # Invertir el eje x para que la presión disminuya hacia la derecha
+plt.grid(True)
+
+# Mostrar la gráfica
+plt.show()

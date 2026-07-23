@@ -25,12 +25,76 @@
 # Ignore Jupyter Notebooks checkpoints
 .ipynb_checkpoints/
 
+# Jupyter/IPython runtime and local configuration
+.ipython/
+.jupyter/
+.cache/
+
+# Python environments and build artifacts
+.venv/
+venv/
+env/
+ENV/
+.python-version
+build/
+dist/
+*.egg-info/
+.eggs/
+
 # Ignore Python temporary files and folders
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 *.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Secrets and local service configuration (including Earth Engine credentials)
+.env
+.env.*
+*.env
+!.env.example
+credentials.json
+service-account*.json
+*.pem
+*.key
+
+# Large satellite, atmospheric-model, and geospatial raster inputs
+*.grib
+*.grb
+*.grib2
+*.nc
+*.nc4
+*.h5
+*.hdf
+*.hdf5
+*.zarr/
+*.tif
+*.tif.aux.xml
+*.gpkg
+*.parquet
+*.feather
+*.kmz
+
+# Machine-learning artifacts and experiment tracking
+*.pt
+*.pth
+*.ckpt
+*.onnx
+mlruns/
+wandb/
+runs/
+
+# Generated analysis outputs
+outputs/
+results/
+figures/
+emissions_images/
 
 # Ignore system files
 .DS_Store

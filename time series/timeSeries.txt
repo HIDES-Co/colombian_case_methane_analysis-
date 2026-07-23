@@ -1,0 +1,757 @@
+import pandas as pd
+import numpy as np
+from shapely.geometry import Polygon, Point
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+import cartopy.crs as ccrs
+import geopandas as gpd
+import contextily as cx
+from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+import os
+import seaborn as sns
+
+df_allDataFiltered = pd.read_csv('colombia_results_total_filtrado.csv')
+
+df_allDataFiltered = df_allDataFiltered.drop(['Unnamed: 0', 'id', 'time'], axis=1)
+
+
+# preprocessing data...
+
+df_allDataFiltered = df_allDataFiltered[df_allDataFiltered['longitude'] >= -80]
+df_allDataFiltered = df_allDataFiltered[df_allDataFiltered['CH4_column_volume_mixing_ratio_dry_air_bias_corrected'] >= 1600]
+df_allDataFiltered['longitude'] = df_allDataFiltered['longitude'].round(3)
+df_allDataFiltered['latitude'] = df_allDataFiltered['latitude'].round(3)
+df_allDataFiltered['coordinates'] = df_allDataFiltered.apply(lambda row: [row['longitude'], row['latitude']], axis=1)
+df_allDataFiltered['date'] = pd.to_datetime(df_allDataFiltered['date'])
+df_allDataFiltered
+
+df_clusteredMeanData = pd.read_csv('mean_values_clustered_v1.csv')
+
+df_clusteredMeanData['coordinates'] = df_clusteredMeanData.apply(lambda row: [row['longitude'], row['latitude']], axis=1)
+
+df_clusteredMeanData
+
+aa = np.sort(df_allDataFiltered['longitude'].unique())
+np.shape(aa)
+
+bb = np.sort(df_clusteredMeanData['longitude'].unique())
+np.shape(bb)
+
+# Find values in array1 that are not in array2
+diff1 = np.setdiff1d(aa, bb)
+print(len(diff1))
+diff1
+
+
+latitude_difference = [-4.145, 12.435, 12.445]
+longitude_difference = [-78.935, -78.925, -78.825, -78.485, -78.465, -78.455, -78.445, -77.875, -77.495]
+
+# Filter rows where longitude is NOT in the longitude_difference list
+df_allDataFiltered = df_allDataFiltered[~df_allDataFiltered['longitude'].isin(longitude_difference)]
+df_allDataFiltered = df_allDataFiltered[~df_allDataFiltered['latitude'].isin(latitude_difference)]
+df_allDataFiltered
+
+# se verifica que las coordenadas existentes sean las mismas en ambos datasets
+
+lon_all_dataset = np.sort(df_allDataFiltered['longitude'].unique())
+lat_all_dataset = np.sort(df_allDataFiltered['latitude'].unique())
+
+lon_cluster_dataset = np.sort(df_clusteredMeanData['longitude'].unique())
+lat_cluster_dataset = np.sort(df_clusteredMeanData['latitude'].unique())
+
+bool_compare = np.array_equal(lon_all_dataset, lon_cluster_dataset) and np.array_equal(lat_all_dataset, lat_cluster_dataset)
+
+print('Are the longitude coordinates the same for both datasets?',
+      bool_compare)
+
+
+
+
+# Select the the values corresponding to a specific value
+
+def getClusterData(df_allValues, df_cluster, cluster):
+    # Filter rows in df_cluster that belong to the specified cluster
+    clusterData = df_cluster[df_cluster['cluster'] == cluster].copy()  # Explicitly create a copy
+    
+    # Convert the 'coordinates' column in both DataFrames to tuples (if they are lists)
+    df_allValues['coordinates_tuple'] = df_allValues['coordinates'].apply(tuple)
+    clusterData.loc[:, 'coordinates_tuple'] = clusterData['coordinates'].apply(tuple)  # Use .loc to avoid warning
+    
+    # Use .isin() to find matching rows
+    matching_rows = df_allValues[df_allValues['coordinates_tuple'].isin(clusterData['coordinates_tuple'])].copy()  # Explicitly create a copy
+    
+    # Add the cluster column to the matching rows using .loc
+    matching_rows.loc[:, 'cluster'] = np.full(len(matching_rows), cluster)
+    
+    # Drop the temporary 'coordinates_tuple' column
+    matching_rows = matching_rows.drop(columns=['coordinates_tuple'])
+    
+    return matching_rows
+
+cluster_0_all_data = getClusterData(df_allDataFiltered, df_clusteredMeanData, 0)
+
+cluster_0_all_data
+
+
+# def getTimeSeriesPlot(df, title):
+#     # creating new columns with year, month and day values 
+#     #df['day'] = df['date'].dt.day
+#     df['month'] = df['date'].dt.month
+#     df['year'] = df['date'].dt.year
+    
+#     # Create the plot
+    
+#     #plt.figure(figsize=(12, 6))
+#     # sns.lineplot(data=df, x='date', y='CH4_column_volume_mixing_ratio_dry_air_bias_corrected', estimator='mean', errorbar=('ci', 95), err_style='band', color='black')
+#     sns.lineplot(data=df, x='year', y='CH4_column_volume_mixing_ratio_dry_air_bias_corrected', estimator='mean', errorbar=('ci', 95), err_style='band')
+#     # plt.title(title)
+#     # plt.xlabel('Date')
+#     # plt.ylabel('CH4 column volume mixing ratio dry air')
+#     # plt.xticks(rotation=45)
+#     # plt.tight_layout()
+#     # plt.grid(True, which='major', linestyle='-', linewidth=0.5, color='gray', alpha=0.5)
+#     # plt.grid(True, which='minor', linestyle=':', linewidth=0.5, color='gray', alpha=0.2)
+#     # plt.show()
+
+def getTimeSeriesPlot(df, cluster_label, ax, labels, color=None):
+    """
+    Plots a time series of monthly averages for a given cluster with custom labels.
+    """
+    # Ensure the dataframe is sorted by date
+    df = df.sort_values('date')
+    
+    # Extract year and month from the date column
+    df['year_month'] = df['date'].dt.to_period('M')  # Group by year and month
+    
+    # Calculate the monthly average
+    monthly_avg = df.groupby('year_month')['CH4_column_volume_mixing_ratio_dry_air_bias_corrected'].mean().reset_index()
+    
+    # Convert 'year_month' back to datetime for plotting
+    monthly_avg['year_month'] = monthly_avg['year_month'].dt.to_timestamp()
+    
+    if labels[cluster_label] == "Colombian Amazon":
+        color = "green"
+    
+    if color == None:
+        # Plot the monthly average time series with custom labels
+        sns.lineplot(data=monthly_avg, x='year_month', y='CH4_column_volume_mixing_ratio_dry_air_bias_corrected', 
+                    label=labels[cluster_label], ax=ax, linewidth=3 )
+    else:
+        sns.lineplot(data=monthly_avg, x='year_month', y='CH4_column_volume_mixing_ratio_dry_air_bias_corrected', 
+                   label=labels[cluster_label], ax=ax, color=color, linewidth=3)
+
+# Create the figure and axis
+plt.figure(figsize=(14, 8))
+ax = plt.gca()
+
+# Set title and labels
+title = 'Methane Time Series by Colombian Regions'
+plt.title(title, fontsize=16)
+plt.xlabel('Date', fontsize=14)
+plt.ylabel('CH4 Column Volume Mixing Ratio Dry Air (ppb)', fontsize=14)
+plt.xticks(rotation=45)
+plt.tight_layout()
+
+# Add grids
+plt.grid(True, which='major', linestyle='-', linewidth=0.5, color='gray', alpha=0.5)
+plt.grid(True, which='minor', linestyle=':', linewidth=0.5, color='gray', alpha=0.2)
+
+# Custom labels for clusters
+labels = ["Caribbean", "Colombian Amazon", "Orinoquía", "Colombian Pacific", "Magdalena", "National average"]
+sns_colors = sns.color_palette("tab10")
+colors = [sns_colors[3], "green", sns_colors[1], sns_colors[0], "purple", "black"]
+# Plot time series for each cluster
+numberOfClusters = 5
+for i in range(numberOfClusters):
+    cluster_i_all_data = getClusterData(df_allDataFiltered, df_clusteredMeanData, i)
+    getTimeSeriesPlot(cluster_i_all_data, i, ax, labels, color=colors[i])
+# national prom graph
+getTimeSeriesPlot(df_allDataFiltered, 5, ax, labels, color='black')
+# Add legend
+plt.legend(loc='best', fontsize=12)
+
+# Improve layout and show plot
+plt.tight_layout()
+plt.show()
+
+sns.color_palette("tab10")
+
+barbados = pd.read_csv('CH4_completo.csv')
+barbados = barbados[(barbados['value']>1850)*(barbados['year']>2018)]
+barbados['date'] = pd.to_datetime(barbados[['year', 'month', 'day']])
+barbados = barbados.drop(['day', 'month', 'year', 'site_code', 'hour', 'minute', 'second', 'time_decimal', 'method', 'event_number', 'instrument', 'qcflag', 'analysis_datetime', 'datetime'], axis=1)
+barbados
+
+global_mean = pd.read_csv('ch4_mm_gl.csv')
+global_mean = global_mean[global_mean['year']>2018]
+global_mean['date'] = pd.to_datetime(global_mean[['year', 'month']].assign(day=1))
+global_mean = global_mean.drop(['month', 'decimal', 'year', 'trend'], axis=1)
+global_mean
+
+def getTimeSeriesPlot(df, value,cluster_label, ax, labels, color=None):
+    """
+    Plots a time series of monthly averages for a given cluster with custom labels.
+    """
+    # Ensure the dataframe is sorted by date
+    df = df.sort_values('date')
+    
+    # Extract year and month from the date column
+    df['year_month'] = df['date'].dt.to_period('M')  # Group by year and month
+    
+    # Calculate the monthly average
+    monthly_avg = df.groupby('year_month')[value].mean().reset_index()
+    
+    # Convert 'year_month' back to datetime for plotting
+    monthly_avg['year_month'] = monthly_avg['year_month'].dt.to_timestamp()
+    
+    
+    if color == None:
+        # Plot the monthly average time series with custom labels
+        sns.lineplot(data=monthly_avg, x='year_month', y=value, 
+                    label=labels[cluster_label], ax=ax, linewidth=2 )
+    else:
+        sns.lineplot(data=monthly_avg, x='year_month', y=value, 
+                   label=labels[cluster_label], ax=ax, color=color, linewidth=2)
+
+scaling_factor = 1.0395307027448444
+df_allDataFiltered['CH4_column_volume_mixing_ratio_dry_air_bias_corrected_scaled'] = df_allDataFiltered['CH4_column_volume_mixing_ratio_dry_air_bias_corrected']*scaling_factor
+
+def getTimeSeriesPlot(df, cluster_label, ax, labels, color=None, add_trend=True, add_confidence=True, 
+                      enso_data=None, highlight_events=None):
+    """
+    Plots a time series of monthly averages for a given cluster with enhanced visualization features.
+    
+    Parameters:
+    -----------
+    df : DataFrame
+        The dataframe containing methane data.
+    cluster_label : int
+        The index of the cluster to plot.
+    ax : matplotlib.axes.Axes
+        The axis to plot on.
+    labels : list
+        List of labels for each cluster.
+    color : str, optional
+        The color for the line plot.
+    add_trend : bool, optional
+        Whether to add a trend line.
+    add_confidence : bool, optional
+        Whether to add confidence intervals.
+    enso_data : DataFrame, optional
+        DataFrame containing ENSO index values.
+    highlight_events : list, optional
+        List of tuples (date, label) for notable events to highlight.
+    """
+    import numpy as np
+    import pandas as pd
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    from scipy import stats
+    from statsmodels.nonparametric.smoothers_lowess import lowess
+    
+    # Ensure the dataframe is sorted by date
+    df = df.sort_values('date')
+    
+    # Extract year and month from the date column
+    df['year_month'] = df['date'].dt.to_period('M')  # Group by year and month
+    
+    # Calculate the monthly average and standard deviation
+    monthly_stats = df.groupby('year_month')['CH4_column_volume_mixing_ratio_dry_air_bias_corrected'].agg(
+        ['mean', 'std', 'count']).reset_index()
+    
+    # Calculate confidence intervals (95%)
+    monthly_stats['ci_95'] = 1.96 * monthly_stats['std'] / np.sqrt(monthly_stats['count'])
+    monthly_stats['upper_ci'] = monthly_stats['mean'] + monthly_stats['ci_95']
+    monthly_stats['lower_ci'] = monthly_stats['mean'] - monthly_stats['ci_95']
+    
+    # Convert 'year_month' back to datetime for plotting
+    monthly_stats['year_month'] = monthly_stats['year_month'].dt.to_timestamp()
+    
+    # Determine the color for the plot
+    if labels[cluster_label] == "Colombian Amazon":
+        color = "green"
+    elif color is None:
+        color = f"C{cluster_label}"
+    
+    # Plot the monthly average time series
+    line = sns.lineplot(data=monthly_stats, x='year_month', y='mean', 
+                        label=labels[cluster_label], ax=ax, color=color, linewidth=2.5)
+    
+    # Add confidence intervals if requested
+    if add_confidence:
+        ax.fill_between(monthly_stats['year_month'], 
+                         monthly_stats['lower_ci'],
+                         monthly_stats['upper_ci'],
+                         color=color, alpha=0.2)
+    
+    # Add trend line if requested
+    if add_trend and len(monthly_stats) > 2:
+        # Use LOWESS smoothing for the trend
+        x_numeric = np.array(range(len(monthly_stats)))
+        y = monthly_stats['mean'].values
+        
+        # Fit LOWESS model
+        lowess_result = lowess(y, x_numeric, frac=0.3)
+        
+        # Plot trend line
+        ax.plot(monthly_stats['year_month'], lowess_result[:, 1], 
+                '--', linewidth=1.5, color=color, alpha=0.7)
+        
+        # Calculate and add linear trend (for rate of change)
+        slope, intercept, r_value, p_value, std_err = stats.linregress(x_numeric, y)
+        annual_rate = slope * 12  # convert monthly to annual rate
+        
+        # Add annotation for rate of change (if significant)
+        if p_value < 0.05:
+            # Find position for text (near the end of the line)
+            x_pos = monthly_stats['year_month'].iloc[-1]
+            y_pos = monthly_stats['mean'].iloc[-1]
+            
+            # Format the rate as +/- X.XX ppb/yr
+            rate_text = f"{annual_rate:.2f} ppb/yr"
+            if annual_rate > 0:
+                rate_text = "+" + rate_text
+            
+            # Add text with small offset
+            ax.text(x_pos, y_pos, rate_text, color=color, fontsize=8, 
+                    ha='right', va='bottom', bbox=dict(facecolor='white', alpha=0.7, pad=2))
+    
+    # Highlight specific events if provided
+    if highlight_events:
+        for event_date, event_label in highlight_events:
+            if event_date >= monthly_stats['year_month'].min() and event_date <= monthly_stats['year_month'].max():
+                ax.axvline(x=event_date, color='red', linestyle=':', linewidth=1.5, alpha=0.7)
+                ax.text(event_date, ax.get_ylim()[1] * 0.95, event_label, rotation=90, 
+                        ha='left', va='top', fontsize=8, bbox=dict(facecolor='white', alpha=0.7, pad=2))
+    
+    return line
+
+def create_enso_dataframe(enso_table):
+    """
+    Convert ENSO table data to a pandas DataFrame with proper date format.
+    
+    Parameters:
+    -----------
+    enso_table : str or DataFrame
+        The ENSO data table as string or DataFrame.
+        
+    Returns:
+    --------
+    DataFrame
+        DataFrame with 'date' and 'enso_index' columns.
+    """
+    import pandas as pd
+    import io
+    
+    # If input is a string, parse it
+    if isinstance(enso_table, str):
+        # Clean and parse the table
+        lines = enso_table.strip().split('\n')
+        header = lines[0].split('|')
+        header = [h.strip() for h in header if h.strip()]
+        
+        data = []
+        for line in lines[2:]:  # Skip header and separator lines
+            if '|' in line:
+                values = line.split('|')
+                values = [v.strip() for v in values if v.strip()]
+                if len(values) >= 13:  # Year + 12 months
+                    year = int(values[0])
+                    for month, value in enumerate(values[1:13], 1):
+                        if value.strip():
+                            data.append([year, month, float(value)])
+    
+    # If input is already a DataFrame, ensure it has the right format
+    else:
+        # Assuming enso_table has 'Year' and monthly columns
+        enso_table = enso_table.melt(id_vars=['Year'], var_name='Month', value_name='enso_index')
+        # Convert month names to numbers if needed
+        month_map = {'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6, 
+                     'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12}
+        if enso_table['Month'].dtype == object:
+            enso_table['Month'] = enso_table['Month'].map(month_map)
+        
+        data = enso_table[['Year', 'Month', 'enso_index']].values.tolist()
+    
+    # Create DataFrame from parsed data
+    enso_df = pd.DataFrame(data, columns=['year', 'month', 'enso_index'])
+    
+    # Convert to datetime
+    enso_df['date'] = pd.to_datetime(enso_df[['year', 'month']].assign(day=1))
+    
+    return enso_df
+
+def setup_methane_timeseries_plot(df_allDataFiltered, df_clusteredMeanData, enso_data=None, regions=None, 
+                                 add_national_avg=True, highlight_events=None, start_date=None, end_date=None):
+    """
+    Creates a comprehensive methane time series plot with multiple enhancements.
+    
+    Parameters:
+    -----------
+    df_allDataFiltered : DataFrame
+        Filtered dataframe with all methane data.
+    df_clusteredMeanData : DataFrame
+        Dataframe with clustered mean data.
+    enso_data : str or DataFrame, optional
+        ENSO index data to use for highlighting El Niño/La Niña periods.
+    regions : list, optional
+        List of region indices to include in the plot.
+    add_national_avg : bool, optional
+        Whether to add the national average.
+    highlight_events : list, optional
+        List of tuples (date, label) for notable events to highlight.
+    start_date : datetime, optional
+        Start date for the plot.
+    end_date : datetime, optional
+        End date for the plot.
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import matplotlib.dates as mdates
+    import pandas as pd
+    import numpy as np
+    from matplotlib.ticker import MultipleLocator
+    import matplotlib.patches as mpatches
+    
+    # Create the figure and axis
+    fig = plt.figure(figsize=(16, 10))
+    
+    # Create a gridspec for the main plot and the ENSO index subplot
+    gs = fig.add_gridspec(2, 1, height_ratios=[4, 1], hspace=0.1)
+    ax = fig.add_subplot(gs[0])
+    
+    # If ENSO data is provided, create a second subplot for it
+    if enso_data is not None:
+        enso_ax = fig.add_subplot(gs[1], sharex=ax)
+        enso_df = create_enso_dataframe(enso_data)
+    else:
+        enso_ax = None
+    
+    # Filter by date range if specified
+    if start_date or end_date:
+        date_mask = pd.Series(True, index=df_allDataFiltered.index)
+        if start_date:
+            date_mask &= df_allDataFiltered['date'] >= pd.Timestamp(start_date)
+        if end_date:
+            date_mask &= df_allDataFiltered['date'] <= pd.Timestamp(end_date)
+        df_allDataFiltered = df_allDataFiltered[date_mask]
+    
+    # Custom labels and colors for clusters
+    full_labels = ["Caribbean", "Colombian Amazon", "Orinoquía", "Colombian Pacific", "Magdalena", "National average"]
+    sns_colors = sns.color_palette("tab10")
+    colors = [sns_colors[3], "green", sns_colors[1], sns_colors[0], "purple", "black"]
+    
+    # Determine which regions to plot
+    if regions is None:
+        regions = range(5)  # Plot all regions by default
+    
+    # Plot each selected region
+    for i in regions:
+        cluster_i_all_data = getClusterData(df_allDataFiltered, df_clusteredMeanData, i)
+        if len(cluster_i_all_data) > 0:  # Only plot if data exists
+            getTimeSeriesPlot(cluster_i_all_data, i, ax, full_labels, color=colors[i])
+    
+    # Add national average if requested
+    if add_national_avg:
+        getTimeSeriesPlot(df_allDataFiltered, 5, ax, full_labels, color='black', 
+                         add_confidence=False, highlight_events=highlight_events)
+    
+    # Calculate overall statistics
+    years = df_allDataFiltered['date'].dt.year.unique()
+    year_min, year_max = min(years), max(years)
+    overall_mean = df_allDataFiltered['CH4_column_volume_mixing_ratio_dry_air_bias_corrected'].mean()
+    
+    # Set title and labels with enhanced information
+    title = f'Methane Time Series by Colombian Regions ({year_min}-{year_max})'
+    #subtitle = f'Mean concentration: {overall_mean:.2f} ppb'
+    plt.suptitle(title, fontsize=18, fontweight='bold')
+    #ax.set_title(subtitle, fontsize=14)
+    
+    ax.set_xlabel('', fontsize=14)  # Remove x-label from top plot
+    ax.set_ylabel('CH₄ Column Volume Mixing Ratio (ppb)', fontsize=14, fontweight='bold')
+    
+    # Format x-axis to show years clearly
+    ax.xaxis.set_major_locator(mdates.YearLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1, 4, 7, 10]))
+    plt.setp(ax.get_xticklabels(), visible=False)  # Hide x-tick labels on top plot
+    
+    # Format y-axis with appropriate scaling
+    ax.yaxis.set_major_locator(MultipleLocator(25))
+    ax.yaxis.set_minor_locator(MultipleLocator(5))
+    
+    # Add enhanced grid
+    ax.grid(True, which='major', linestyle='-', linewidth=0.7, color='gray', alpha=0.5)
+    ax.grid(True, which='minor', linestyle=':', linewidth=0.5, color='gray', alpha=0.2)
+    
+    # Add a horizontal line for global average methane (approximate 2020 value)
+    # global_avg = 1875  # Global average methane in 2020 (adjust as needed)
+    # ax.axhline(y=global_avg, color='red', linestyle='--', linewidth=1, alpha=0.7)
+    # ax.text(ax.get_xlim()[0], global_avg + 2, f'Global Average (~{global_avg} ppb)', 
+    #         color='red', fontsize=10, va='bottom', ha='left',
+    #        bbox=dict(facecolor='white', alpha=0.7, pad=2))
+    
+    # If ENSO data is provided, add ENSO index subplot and highlight periods
+    if enso_data is not None and enso_ax is not None:
+        # Plot ENSO index
+        enso_df = create_enso_dataframe(enso_data)
+        
+        # Plot ENSO index line
+        sns.lineplot(x='date', y='enso_index', data=enso_df, ax=enso_ax, color='black', linewidth=1.5)
+        
+        # Fill areas for El Niño (red) and La Niña (blue)
+        enso_ax.fill_between(enso_df['date'], enso_df['enso_index'], 0, 
+                            where=(enso_df['enso_index'] > 0), 
+                            interpolate=True, color='red', alpha=0.3)
+        enso_ax.fill_between(enso_df['date'], enso_df['enso_index'], 0, 
+                            where=(enso_df['enso_index'] < 0), 
+                            interpolate=True, color='blue', alpha=0.3)
+        
+        # Highlight the same regions in the main plot with different intensities
+        for i in range(len(enso_df) - 1):
+            current_date = enso_df.iloc[i]['date']
+            next_date = enso_df.iloc[i+1]['date']
+            enso_value = enso_df.iloc[i]['enso_index']
+            
+            # Add shaded areas to main plot based on ENSO index
+            if enso_value <= -0.5:  # Strong La Niña (blue)
+                ax.axvspan(current_date, next_date, alpha=0.02, color='blue')
+            elif enso_value >= 0.5:  # Strong El Niño (red)
+                ax.axvspan(current_date, next_date, alpha=0.02, color='red')
+        
+        # Configure ENSO subplot
+        enso_ax.set_ylabel('ENSO Index', fontsize=12, fontweight='bold')
+        enso_ax.set_xlabel('Date', fontsize=12, fontweight='bold')
+        enso_ax.grid(True, alpha=0.3)
+        enso_ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+        
+        # Add horizontal lines for El Niño/La Niña thresholds
+        enso_ax.axhline(y=0.5, color='red', linestyle='--', alpha=0.5)
+        enso_ax.axhline(y=-0.5, color='blue', linestyle='--', alpha=0.5)
+        
+        # Add text labels for thresholds
+        enso_ax.text(enso_ax.get_xlim()[0], 0.5, 'El Niño threshold', 
+                     color='red', va='bottom', ha='left', fontsize=8)
+        enso_ax.text(enso_ax.get_xlim()[0], -0.5, 'La Niña threshold', 
+                     color='blue', va='top', ha='left', fontsize=8)
+        
+        # Format x-axis
+        enso_ax.xaxis.set_major_locator(mdates.YearLocator())
+        enso_ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+        plt.setp(enso_ax.get_xticklabels(), rotation=45)
+        
+        # Add ENSO patches to legend
+        nina_patch = mpatches.Patch(color='blue', alpha=0.3, label='La Niña')
+        nino_patch = mpatches.Patch(color='red', alpha=0.3, label='El Niño')
+    
+    # Add enhanced legend with better positioning and formatting
+    handles, labels = ax.get_legend_handles_labels()
+    if enso_data is not None:
+        handles.extend([nina_patch, nino_patch])
+    
+    legend = ax.legend(handles=handles, loc='upper left', fontsize=12, 
+                      framealpha=0.9, edgecolor='gray')
+    legend.get_frame().set_linewidth(0.8)
+    
+    # Add a text box with study information
+    info_text = (
+        "Data Source: Satellite data from Copernicus Sentinel-5P\n"
+        "Resolution: Monthly averages\n"
+        "Regions: Based on geographic clustering\n"
+        "ENSO Index: ONI (Oceanic Niño Index)"
+    )
+    plt.figtext(0.02, 0.02, info_text, fontsize=10, ha='left', 
+               bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray', boxstyle='round,pad=0.5'))
+    
+    # Improve layout and adjust margins
+    plt.subplots_adjust(bottom=0.15, top=0.9, right=0.95, left=0.08)
+    
+    return ax, enso_ax
+
+# Example usage:
+enso_data = pd.DataFrame({
+    'Year': [2019, 2020, 2021, 2022, 2023, 2024],
+    'Jan': [0.7, 0.5, -1.0, -1.0, -0.7, 1.8],
+    'Feb': [0.7, 0.5, -0.9, -0.9, -0.4, 1.5],
+    'Mar': [0.7, 0.4, -0.8, -1.0, -0.1, 1.1],
+    'Apr': [0.7, 0.2, -0.7, -1.1, 0.2, 0.7],
+    'May': [0.5, -0.1, -0.5, -1.0, 0.5, 0.4],
+    'Jun': [0.5, -0.3, -0.4, -0.9, 0.8, 0.2],
+    'Jul': [0.3, -0.4, -0.4, -0.8, 1.1, 0.0],
+    'Aug': [0.1, -0.6, -0.5, -0.9, 1.3, -0.1],
+    'Sep': [0.2, -0.9, -0.7, -1.0, 1.6, -0.2],
+    'Oct': [0.3, -1.2, -0.8, -1.0, 1.8, -0.3],
+    'Nov': [0.5, -1.3, -1.0, -0.9, 1.9, -0.4],
+    'Dec': [0.5, -1.2, -1.0, -0.8, 2.0, -0.5]
+})
+
+notable_events = [
+    (pd.Timestamp('2020-03-01'), 'COVID-19 Lockdowns'),
+    (pd.Timestamp('2020-05-01'), 'Enso index: 0'),
+    (pd.Timestamp('2023-04-01'), 'Enso index: 0')
+]
+
+# Create the enhanced plot with ENSO data
+ax, enso_ax = setup_methane_timeseries_plot(
+    df_allDataFiltered=df_allDataFiltered, 
+    df_clusteredMeanData=df_clusteredMeanData,
+    highlight_events=notable_events,
+    enso_data=enso_data
+)
+
+plt.savefig('colombia_methane_timeseries_enhanced.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+def getTimeSeriesPlot(df, value, cluster_label, ax, labels, color=None, add_trend=True, add_confidence=True):
+    """
+    Plots a time series of monthly averages with enhanced visualization features.
+    
+    Parameters:
+    -----------
+    df : DataFrame
+        Input dataframe with date and value columns
+    value : str
+        Column name for the value to plot
+    cluster_label : int
+        Index for the label
+    ax : matplotlib.axes
+        Axis to plot on
+    labels : list
+        List of labels for the legend
+    color : str, optional
+        Color for the line plot
+    add_trend : bool, optional
+        Whether to add trend line
+    add_confidence : bool, optional
+        Whether to add confidence intervals
+    """
+    import numpy as np
+    from scipy import stats
+    from statsmodels.nonparametric.smoothers_lowess import lowess
+    
+    # Ensure the dataframe is sorted by date
+    df = df.sort_values('date')
+    
+    # Extract year and month
+    df['year_month'] = df['date'].dt.to_period('M')
+    
+    # Calculate monthly statistics
+    monthly_stats = df.groupby('year_month')[value].agg(['mean', 'std', 'count']).reset_index()
+    
+    # Calculate confidence intervals (95%)
+    monthly_stats['ci_95'] = 1.96 * monthly_stats['std'] / np.sqrt(monthly_stats['count'])
+    monthly_stats['upper_ci'] = monthly_stats['mean'] + monthly_stats['ci_95']
+    monthly_stats['lower_ci'] = monthly_stats['mean'] - monthly_stats['ci_95']
+    
+    # Convert 'year_month' back to datetime
+    monthly_stats['year_month'] = monthly_stats['year_month'].dt.to_timestamp()
+    
+    # Plot main line
+    line = sns.lineplot(data=monthly_stats, x='year_month', y='mean',
+                       label=labels[cluster_label], ax=ax,
+                       color=color if color else f"C{cluster_label}",
+                       linewidth=2)
+    
+    # Add confidence intervals if requested
+    if add_confidence:
+        ax.fill_between(monthly_stats['year_month'],
+                       monthly_stats['lower_ci'],
+                       monthly_stats['upper_ci'],
+                       color=color if color else f"C{cluster_label}",
+                       alpha=0.2)
+    
+    # Add trend line if requested
+    if add_trend and len(monthly_stats) > 2:
+        # Use LOWESS smoothing for the trend
+        x_numeric = np.array(range(len(monthly_stats)))
+        y = monthly_stats['mean'].values
+        
+        # Fit LOWESS model
+        lowess_result = lowess(y, x_numeric, frac=0.3)
+        
+        # Plot trend line
+        ax.plot(monthly_stats['year_month'], lowess_result[:, 1],
+                '--', linewidth=1.5,
+                color=color if color else f"C{cluster_label}",
+                alpha=0.7)
+        
+        # Calculate and add linear trend
+        slope, intercept, r_value, p_value, std_err = stats.linregress(x_numeric, y)
+        annual_rate = slope * 12  # convert monthly to annual rate
+        
+        # Add annotation for rate of change (if significant)
+        if p_value < 0.05:
+            x_pos = monthly_stats['year_month'].iloc[-1]
+            y_pos = monthly_stats['mean'].iloc[-1]
+            
+            rate_text = f"{annual_rate:.2f} ppb/yr"
+            if annual_rate > 0:
+                rate_text = "+" + rate_text
+            
+            ax.text(x_pos, y_pos, rate_text,
+                   color=color if color else f"C{cluster_label}",
+                   fontsize=8, ha='right', va='bottom',
+                   bbox=dict(facecolor='white', alpha=0.7, pad=2))
+    
+    return line
+
+import matplotlib.dates as mdates
+# Create main plot
+plt.style.use('seaborn-white')
+fig, ax = plt.subplots(figsize=(16, 10))
+
+# Set title and labels with enhanced formatting
+title = 'Methane Levels Comparison:\nGround-Based Station vs Global Average vs Scaled Copernicus S5P'
+plt.suptitle(title, fontsize=16, fontweight='bold')
+
+# Add subtitle with date range
+# date_range = f"({pd.to_datetime(barbados['date'].min()).year}-{pd.to_datetime(barbados['date'].max()).year})"
+# plt.title(date_range, fontsize=14)
+
+plt.xlabel('Date', fontsize=14, fontweight='bold')
+plt.ylabel('Methane Ground Concentration (ppb)', fontsize=14, fontweight='bold')
+
+# Custom labels and colors
+labels = ["Ground-Based Station Ragged Point, Barbados",
+          "Global Land Average",
+          "National Average Scaled Copernicus S5P"]
+colors = ['#1f77b4', '#2ca02c', '#ff7f0e']  # Custom colors
+
+# Plot each dataset
+getTimeSeriesPlot(barbados, 'value', 0, ax, labels, color=colors[0])
+getTimeSeriesPlot(global_mean, 'average', 1, ax, labels, color=colors[1])
+getTimeSeriesPlot(df_allDataFiltered, 
+                  'CH4_column_volume_mixing_ratio_dry_air_bias_corrected_scaled',
+                  2, ax, labels, color=colors[2])
+
+# Enhance grid
+ax.grid(True, which='major', linestyle='-', linewidth=0.8, color='gray', alpha=0.3)
+ax.grid(True, which='minor', linestyle=':', linewidth=0.5, color='gray', alpha=0.2)
+
+# Format x-axis
+ax.xaxis.set_major_locator(mdates.YearLocator())
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+plt.xticks(rotation=45)
+
+# Add legend with enhanced formatting
+legend = plt.legend(loc='upper left', fontsize=12, framealpha=0.9, edgecolor='gray')
+legend.get_frame().set_linewidth(0.8)
+
+# Add information box
+info_text = (
+    "Data Sources:\n"
+    "• Ground-based measurements from Ragged Point Station\n"
+    "• Global average from NOAA Global Monitoring Laboratory\n"
+    "• Scaled satellite data from Copernicus Sentinel-5P"
+)
+plt.figtext(0.75, 0.1, info_text, fontsize=10, ha='left',
+           bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray',
+                    boxstyle='round,pad=0.5'))
+
+# Improve layout
+plt.tight_layout()
+
+# Save and show plot
+plt.savefig('methane_comparison_enhanced_barbados.png', dpi=300, bbox_inches='tight')
+plt.show()
+

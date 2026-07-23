@@ -8,7 +8,7 @@ Created on Sun Oct 20 10:23:48 2024
 import sys
 import os
 
-#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
 from common.satelite import ColSatellite, csv_from_sat, statAnalisisData
@@ -31,8 +31,12 @@ Mun_col = Municipios.filter(ee.Filter.eq('ADM0_NAME', 'Colombia'))#Filtro de dat
 
 ############ Using a geodataframe
 
+current_dir = os.getcwd()
+parent_dir = os.path.dirname(current_dir)
 # Path to the .geojson file
-file_path = 'common/Departamentos_Junio_2024_shp/Departamento.shp'
+file_path = os.path.join(parent_dir, 'common/Departamentos_Junio_2024_shp/Departamento.shp')
+
+
 # Load the file into a GeoDataFrame
 gdf = gpd.read_file(file_path)
 
@@ -43,7 +47,9 @@ roi = gdf
 
 
 #csv_filename = 'data_analysis/colombia_prom_2020_filtered.csv'
-csv_filename = 'time series/colombia_results_filtrado.csv'
+csv_filename = os.path.join(parent_dir, 'time series/colombia_results_total_filtrado.csv')
+
+#csv_filename = 'time series/colombia_results_total_filtrado.csv'
 layer = 'CH4_column_volume_mixing_ratio_dry_air_bias_corrected'
 title = 'CH4 column Mean values 2019-02-01 to 2024-09-27'
 cbar_title = 'CH4 column Mean values mol/mol'
@@ -64,17 +70,16 @@ sat_data = csv_from_sat(r)
 
 ## Colors
 # Define your base colors
-colors = ['black', 'blue', 'purple', 'cyan', 'green', 'yellow', 'red']
-
+colors_base = ['black', 'blue', 'purple', 'cyan', 'green', 'yellow', 'red']
 # Number of segments you want between each color
-num_segments = 30  # Change this value for more or fewer interpolated colors
+num_segments = 60     # Change this value for more or fewer interpolated colors
 
 # Create an array to hold the interpolated colors
 interpolated_colors = []
 # Interpolate between each pair of colors
-for i in range(len(colors) - 1):
+for i in range(len(colors_base) - 1):
     # Create a gradient of colors between each pair
-    gradient = np.linspace(mcolors.to_rgb(colors[i]), mcolors.to_rgb(colors[i + 1]), num_segments)
+    gradient = np.linspace(mcolors.to_rgb(colors_base[i]), mcolors.to_rgb(colors_base[i + 1]), num_segments)
     interpolated_colors.append(gradient)
 
 # Concatenate all gradients into a single array
@@ -87,12 +92,12 @@ custom_cmap = mcolors.LinearSegmentedColormap.from_list("custom_cmap", interpola
 
 
 #color_list=['jet', 'viridis', custom_cmap, 'plasma']
-color_list=['jet']
+color_list=['plasma']
 
 for item in color_list:
     
-    sat_data.plot_sat_data(layer, roi, title, cbar_title, color=item, levels=[1640, 1980])
+    sat_data.plot_sat_data(layer, roi, title, cbar_title, color=custom_cmap, levels=[1640, 1980])
     
-    incidences = sat_data.get_incidences(roi, 'Methane Measurement Density', 'Observation Count', color=item, levels=[0, 285])
+    #incidences = sat_data.get_incidences(roi, 'Methane Measurement Density', 'Observation Count', color=item, levels=[0, 285])
 
 
