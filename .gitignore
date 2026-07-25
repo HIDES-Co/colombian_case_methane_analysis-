@@ -106,3 +106,12 @@ tmp/
 
 Departamentos_Junio_2024_shp/
 res_img/
+
+# Raw land-cover deliveries used by scripts_2026/Scripts/NN.ipynb.
+# Keep these multi-GB inputs outside Git; see scripts_2026/Scripts/README.md.
+scripts_2026/Scripts/Cobertura_*/
+
+# Office lock files and geodatabase/archive containers from raw deliveries
+~$*
+*.gdb/
+*.zip
