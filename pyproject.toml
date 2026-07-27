@@ -22,6 +22,7 @@ dependencies = [
 notebooks = [
     "ipykernel>=6.29",
     "jupyterlab>=4.3",
+    "lckr-jupyterlab-variableinspector>=3.2",
 ]
 analysis = [
     "deep-translator>=1.11",
@@ -33,7 +34,7 @@ analysis = [
     "seaborn>=0.13",
     "statsmodels>=0.14",
     "torch>=2.5",
-    "umap-learn>=0.5",
+    "linearmodels>=0.5",
 ]
 surface = [
     "basemap>=1.4",

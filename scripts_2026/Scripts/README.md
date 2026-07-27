@@ -15,6 +15,19 @@ uv sync --group notebooks --group analysis
 uv run jupyter lab scripts_2026/Scripts/NN.ipynb
 ```
 
+> Si estás en una VPS sin navegador local, `jupyter lab` no puede abrirse directamente:
+> usa `uv run jupyter lab --no-browser --ip=0.0.0.0 --port=8888` y un túnel SSH
+> (`ssh -N -L 8888:localhost:8888 usuario@ip-de-la-vps`) para abrirlo en el navegador de tu
+> máquina local, o conéctate con un editor Remote-SSH (VS Code/Cursor/JetBrains Gateway).
+> Ver detalle en el `README.md` de la raíz, sección "Trabajando desde una VPS".
+
+JupyterLab cubre el mismo flujo de trabajo que un IDE como Spyder (editor,
+consola, terminal, gráficas inline, explorador de archivos). Lo único que no
+trae de fábrica es el explorador de variables tipo Spyder; para eso se agregó
+`lckr-jupyterlab-variableinspector` al grupo `notebooks`. Tras `uv sync` queda
+disponible como panel lateral en JupyterLab (menú **View → Variable
+Inspector**, o el ícono correspondiente en la barra lateral izquierda).
+
 Las dependencias principales del cuaderno están declaradas en
 `pyproject.toml` y fijadas en `uv.lock`. Algunas secciones históricas o
 comentadas mencionan paquetes no declarados (`deepl`, `polars`, TensorFlow y

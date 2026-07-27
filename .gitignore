@@ -94,6 +94,7 @@ outputs/
 results/
 figures/
 emissions_images/
+scripts_2026/Datos_a_05-2026/
 
 # Ignore system files
 .DS_Store
