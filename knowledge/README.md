@@ -12,6 +12,32 @@ Documentos de esta carpeta:
 - [`redundancias_e_inconsistencias.md`](./redundancias_e_inconsistencias.md) — puntos de
   duplicación de lógica y decisiones no reconciliadas entre notebooks, útil como lista de
   candidatos a refactor/consolidación.
+- [`glint_y_calidad_del_dato.md`](./glint_y_calidad_del_dato.md) — si el *sun glint*
+  compromete el XCH₄ sobre zonas inundadas (caso La Mojana): geometría de S5P sobre
+  Colombia, evidencia empírica, criterio de la máscara de calidad y qué falta para
+  defenderlo en publicación.
+
+## Notebook vigente: `scripts_2026/Scripts/NN_areas_igac.ipynb`
+
+`NN.ipynb` es el monolito histórico. El trabajo activo está en `NN_areas_igac.ipynb`, que
+reorganiza el flujo en secciones numeradas y tiene **dos ramas de análisis** que no hay que
+confundir:
+
+| | §3 transversal | §4 causal |
+|---|---|---|
+| insumo | `colombia_corr_metano_2022_2023_cobertura_2022.csv` | `panel_bienal_cobertura_multianual.csv` |
+| cobertura | **una** capa (2022) para los dos años de CH₄ | **su propia** capa por periodo (2018/2020/2022/2024) |
+| CH₄ | media anual simple | media bienal con meses equiponderados |
+| identifica | asociación en el espacio | efecto del cambio en el tiempo |
+
+La rama causal empareja cada capa del IGAC con el bienio de CH₄ que le corresponde
+(2018↔2019, 2020↔2020-21, 2022↔2022-23, 2024↔2024-25) porque las coberturas oficiales
+salen cada dos años. El bienio 2018 tiene un solo año: el producto L3 de Sentinel-5P en
+Earth Engine arranca el 2019-02-08.
+
+Las columnas dummy de cobertura las fija un **catálogo canónico de 166 clases**, no la capa
+de cada año; sin eso `pd.get_dummies` emite solo las clases presentes en cada capa y el
+panel multi-año se alinea con NaN en silencio.
 
 ## Flujo de datos de extremo a extremo
 
