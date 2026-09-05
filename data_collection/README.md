@@ -1,8 +1,9 @@
 # Recoleccion de datos desde Google Earth Engine
 
-Este directorio contiene dos flujos con finalidades diferentes:
+Este directorio contiene tres flujos con finalidades diferentes:
 
-- `collect_gee_colombia.py`: recolector productivo, reanudable y verificable.
+- `collect_gee_colombia.py`: recolector productivo de CH4, reanudable y verificable.
+- `collect_covariates_gee.py`: recolector de covariables (DEM, albedo SWIR) en rasteres.
 - `getCSV.ipynb`: notebook historico para exploracion; no se recomienda para descargas completas.
 
 ## Producto de metano
@@ -17,7 +18,7 @@ El proceso usa:
 - `Image.sample()` en la proyeccion de la banda CH4 corregida, sin geometria por fila.
 - `ee.data.computeFeatures()` con paginacion automatica.
 - El endpoint `earthengine-highvolume` con ocho trabajadores por defecto.
-- Un archivo Parquet atomico por imagen, particionado por ano y mes.
+- Un archivo Parquet atomico por imagen, particionado por año y mes.
 - Reintentos con espera exponencial para errores transitorios.
 - Validacion del esquema Parquet antes de omitir una imagen ya descargada.
 - Bloqueo del directorio para impedir dos escritores concurrentes.
@@ -188,8 +189,39 @@ Referencias oficiales:
 - [`computeFeatures`](https://developers.google.com/earth-engine/apidocs/ee-data-computefeatures)
 - [`Image.sample`](https://developers.google.com/earth-engine/apidocs/ee-image-sample)
 
+## Covariables (DEM y albedo SWIR)
+
+`collect_covariates_gee.py` implementa el paso 1 del plan 01 y el paso 2 del
+plan 02: exporta GeoTIFF reducidos a la malla harp de 0.01 y 0.06 grados
+(el mismo origen -120.0 / 50.0 del producto de CH4), recortados a Colombia
+mediante `ee.data.computePixels`, y los muestrea localmente en los centros de
+pixel de la malla CH4. Nunca envia los ~700 k puntos a Earth Engine.
+
+```bash
+# DEM: 6 GeoTIFF estaticos + columnas elev_* en covariables/estaticas_0p01.parquet
+uv run python data_collection/collect_covariates_gee.py \
+  --project ee-hides --layer dem
+
+# Albedo SWIR MCD43A3: medias mensuales 2019-01..2025-12 y anuales 2022/2024
+uv run python data_collection/collect_covariates_gee.py \
+  --project ee-hides --layer albedo_swir --start 2019-01 --end 2026-01
+```
+
+Salidas de analisis en `scripts_2026/Datos_a_05-2026/covariables/`
+(`estaticas_0p01.parquet`, `mensuales/albedo_swir_0p01.parquet`, cada una con
+su `.json` hermano de procedencia). Rasteres intermedios reanudables en
+`data_collection/outputs/covariables/<capa>/` con el mismo esquema de
+manifiesto y configuracion que el recolector de CH4. `--dry-run` lista lo
+pendiente, `--skip-sample` solo descarga, `--sample-only` solo reconstruye los
+parquet desde los rasteres presentes. La union en el analisis se hace
+exclusivamente con `common.covariables.unir_covariables`; las fichas por
+variable estan en `knowledge/covariables.md`.
+
 ## Meteorologia
 
-La meteorologia todavia no forma parte del recolector productivo. La fuente,
-variables, reglas de union y validaciones propuestas estan documentadas en
-[`METEOROLOGY_PLAN.md`](METEOROLOGY_PLAN.md).
+La meteorologia todavia no forma parte del recolector productivo. Su
+incorporacion (variables priorizadas por impacto, reglas de union temporal y
+espacial, convenciones de procedencia, pruebas de rendimiento y criterios de
+aceptacion) esta definida en el plan de trabajo
+[`plans/active/06_meteorologia_era5.md`](../plans/active/06_meteorologia_era5.md),
+que reemplaza al antiguo `METEOROLOGY_PLAN.md`.

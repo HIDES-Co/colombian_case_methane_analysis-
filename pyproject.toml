@@ -14,6 +14,7 @@ dependencies = [
     "numpy>=1.26",
     "pandas>=2.2",
     "pyarrow>=18.0",
+    "rasterio>=1.4.4",
     "requests>=2.32",
     "shapely>=2.0",
     "xyzservices>=2024.9.0",

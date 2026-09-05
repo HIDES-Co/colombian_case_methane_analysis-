@@ -496,7 +496,9 @@ def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def prepare_output_directory(output: Path, config: dict[str, Any]) -> None:
+def prepare_output_directory(
+    output: Path, config: dict[str, Any], data_glob: str = "*.parquet"
+) -> None:
     """Prevent datasets with incompatible extraction settings from mixing."""
     output.mkdir(parents=True, exist_ok=True)
     config_path = output / CONFIG_FILENAME
@@ -512,8 +514,8 @@ def prepare_output_directory(output: Path, config: dict[str, Any]) -> None:
                 "choose another --output directory"
             )
         return
-    if next(output.rglob("*.parquet"), None) is not None:
-        raise CollectionError(f"{output} contains Parquet files but no {CONFIG_FILENAME}")
+    if next(output.rglob(data_glob), None) is not None:
+        raise CollectionError(f"{output} contains {data_glob} files but no {CONFIG_FILENAME}")
     write_json_atomic(config_path, config)
 
 
@@ -735,7 +737,7 @@ def run_collection(
                     )
                     append_manifest(manifest_path, record)
                     LOGGER.info(
-                        "Completed %s: %,d rows in %.1fs (%d/%d pending)",
+                        "Completed %s: %d rows in %.1fs (%d/%d pending)",
                         job.index,
                         result.rows,
                         result.duration_seconds,
@@ -844,7 +846,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     LOGGER.info(
-        "Finished: %d completed, %d skipped, %d failed, %,d rows",
+        "Finished: %d completed, %d skipped, %d failed, %d rows",
         summary.completed,
         summary.skipped,
         summary.failed,
