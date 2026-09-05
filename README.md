@@ -2,60 +2,134 @@
 
 Herramientas y cuadernos para recolectar, analizar y visualizar mediciones de metano atmosférico en Colombia.
 
-## Entorno con uv
+---
 
-El repositorio usa [uv](https://docs.astral.sh/uv/) como único gestor de Python, dependencias y entorno virtual. La versión de desarrollo es Python 3.11 y está declarada en `.python-version`.
+## Flujo de ejecución en VPS
 
-Instala `uv` y crea el entorno correspondiente según el análisis:
+Instrucciones para configurar el entorno, gestionar procesos con `tmux`, ejecutar Jupyter Lab en el VPS y utilizar Antigravity CLI (`agy`).
+
+---
+
+### 1. Configuración del entorno con uv
+
+El repositorio utiliza [uv](https://docs.astral.sh/uv/) como gestor de Python y dependencias (Python 3.11 declarado en `.python-version`).
+
+1. Instalar `uv` (si no está disponible):
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   source $HOME/.local/bin/env
+   ```
+
+2. Sincronizar dependencias:
+   ```bash
+   # Instalar dependencias base y todos los grupos
+   uv sync --all-groups
+   ```
+   *O instalar solo grupos específicos:*
+   ```bash
+   uv sync --group notebooks --group analysis
+   ```
+
+3. Registrar el kernel para Jupyter:
+   ```bash
+   uv run python -m ipykernel install --user --name colombian-methane --display-name "Python (Colombian Methane)"
+   ```
+
+---
+
+### 2. Ejecutar Jupyter Lab con tmux
+
+1. Crear una sesión de `tmux`:
+   ```bash
+   tmux new -s jupyter
+   ```
+
+2. Iniciar el servidor con el script de inicio (genera token y muestra la URL local):
+   ```bash
+   ./start_jupyter.sh
+   ```
+   *(Opcional: puedes pasar un puerto específico, ej. `./start_jupyter.sh 8889`)*
+
+3. Desacoplar la sesión:
+   - Presiona `Ctrl + b` y luego `d`.
+
+---
+
+### 3. Conexión local mediante túnel SSH
+
+Desde tu máquina local (Asgurate que estas en local!!!), redirige el puerto del VPS:
 
 ```bash
-uv sync # solo base
-uv sync --all-groups
+ssh -N -L 8888:localhost:8888 -l root -p 22 <IP_DEL_VPS>
 ```
 
-Los grupos opcionales son:
-
-- `notebooks`: JupyterLab y kernel de Python.
-- `analysis`: estadística, clustering, autoencoders y visualización avanzada.
-- `surface`: lectura de perfiles atmosféricos en GRIB mediante `pygrib`.
-- `dev`: pruebas y linting.
-
-Por ejemplo, para trabajar solamente con notebooks y análisis:
-
-```bash
-uv sync --group notebooks --group analysis
+Abre en tu navegador:
 ```
+http://localhost:8888
+```
+Ingresa el token si es requerido.
 
-Ejecuta scripts dentro del entorno con `uv run`:
+---
+
+### 4. Uso de Antigravity CLI (agy)
+
+1. Iniciar una sesión persistente para el CLI:
+   ```bash
+   tmux new -s agy
+   ```
+
+2. Ejecutar el asistente:
+   ```bash
+   agy
+   ```
+
+3. Desacoplar con `Ctrl + b` y `d`. Para retomar la sesión:
+   ```bash
+   tmux attach -t agy
+   ```
+
+---
+
+## Referencia de comandos
+
+### Comandos de tmux
+
+| Acción | Comando |
+| :--- | :--- |
+| Crear sesión | `tmux new -s <nombre>` |
+| Listar sesiones | `tmux ls` |
+| Reconectar a sesión | `tmux attach -t <nombre>` |
+| Desacoplar sesión activa | `Ctrl + b` luego `d` |
+| Eliminar sesión | `tmux kill-session -t <nombre>` |
+
+### Comandos comunes con uv
 
 ```bash
+# Ejecutar scripts
 uv run python all_data_plotting/plotting.py
-uv run jupyter lab
+
+# Linters y pruebas
 uv run ruff check .
+uv run pytest
+
+# Actualizar dependencias resueltas
+uv lock
 ```
 
-Tras cambiar `pyproject.toml`, actualiza el lockfile con `uv lock`. El archivo `uv.lock` debe versionarse para que todos usen las mismas versiones resueltas.
+### Grupos de dependencias
 
-### Trabajando desde una VPS (sin navegador local)
+- `notebooks`: JupyterLab, ipykernel e inspector de variables.
+- `analysis`: Modelado, clustering, PyTorch, Scikit-learn, Pingouin y visualización.
+- `surface`: Lectura de archivos GRIB (`pygrib`, `basemap`).
+- `dev`: Pruebas (`pytest`) y análisis estático (`ruff`).
 
-Si este repositorio se ejecuta en una VPS (como es el caso actual), `uv run jupyter lab`
-por sí solo intentará abrir un navegador en la propia máquina remota, lo cual falla porque
-no hay entorno gráfico. Hay dos formas prácticas de trabajar:
-
-**JupyterLab remoto + túnel SSH (recomendada para notebooks pesados como `NN.ipynb`)**
-
-En la VPS:
-
-```bash
-uv run jupyter lab --no-browser --ip=0.0.0.0 --port=8888 --allow-root
-```
-
-y, desde tu máquina local, un túnel SSH hacia ese puerto:
-
-```bash
-ssh -N -L 8888:localhost:8888 -l root -p 22 194.163.183.88
-```
+---
 
 ## Datos y credenciales
 
-Los archivos grandes de satélite, GRIB, ráster, resultados generados, modelos y credenciales están excluidos mediante `.gitignore`. Cada persona debe conservarlos localmente y configurar sus credenciales de Google Earth Engine antes de ejecutar los flujos que usan `ee`.
+Los archivos de datos satelitales, GRIB, ráster y credenciales están excluidos en `.gitignore`.
+
+Para autenticar Google Earth Engine:
+```bash
+uv run python -c "import ee; ee.Authenticate()"
+```
